@@ -1,3 +1,74 @@
+[v6r15p9]
+
+*Configuration
+FIX: fixed CS agents initialization bug
+
+*DMS
+FIX: fixed inconsistency between DataIntegrity and ConsistencyInspector modules
+
+*Interfaces
+FIX: Fix download of LFNs in InputSandbox when running job locally
+
+[v6r15p8]
+
+*Configuration
+NEW: Added DryRun option for CS agents (false by default, True for new installations)
+
+[v6r15p7]
+
+*Core
+CHANGE: Enabled attachments in the emails
+
+*TS
+*CHANGE: Added possibility for multiple operations in Data Operation Transformations
+
+[v6r15p6]
+
+*Resources
+FIX: FCConditionParser: ProxyPlugin handles the case of having no proxy
+
+*WMS
+FIX: MJF messages correctly parsed from the pilot
+NEW: Added integration test for TimeLeft utility and script calling it
+
+[v6r15p5]
+
+Included fixes from v6r14p36 patch release
+
+*Framework
+FIX: added GOCDB2CSAgent in template
+FIX: Fixed permissions for HostLogging
+
+*DMS
+FIX: Introduced hopefully temporary fix to circumvent globus bug in gfal2
+
+*WMS:
+FIX: added test for MJF and made code more robust
+
+*RSS
+NEW: HTML notification Emails
+
+
+[v6r15p4]
+
+Included fixes from v6r14p35 patch release
+
+*Core
+NEW: Added a new way of doing pfnparse and pfnunparse using the standard python library. 
+     The two methods now contains a flag to know which method to use. By default, the old 
+     hand made one is used. The new one works perfectly for all standard protocols, except SRM
+
+*RSS
+FIX: dirac-rss-sync - command fixed to work with calling services rather than 
+     databases directly
+     
+*Resources     
+CHANGE: In multiple Storage classes use pfnparse and pfnunparse methods to manipulate
+        url strings instead of using just string operations
+NEW: A new attribute is added to the storage plugins: DYNAMIC_OPTIONS. This allows to construct 
+     URLs with attributes going at the end of the URL, in the form ?key1=value1&key2=value2 
+     This is useful for xroot and http.         
+
 [v6r15p3]
 
 Included changes from v6r14p34 patch release
@@ -41,6 +112,7 @@ FIX: XROOTStorage unit test reenabled by mocking the xrootd import
 Removed general "from DIRAC.Core.Utilities import *" in the top-level __init__.py
 
 Made service handlers systematically working with unicode string arguments
+Added requirements.txt and Makefile in the root of the project to support pip style installation
 
 DIRAC documentation moved to the "docs" directory if the DIRAC project from the
 DIRACDocs separate project.
@@ -148,6 +220,7 @@ FIX: Request - fix for the case when one of the request is malformed, the rest o
      the requests could not be swiped
 FIX: ReqProxyHandler - don't block the ReqProxy sweeping if one of the request is buggy     
 CHANGE: ReqProxyHandler - added monitoring counters
+NEW: ReqProxyHandler - added interface methods to list and show requests in a ReqProxy
 
 *Resources
 FIX: SRM2Storage - do not add accounting to the output structure as it is done in 
@@ -161,6 +234,57 @@ NEW: Job API - added setParameterSequence() to add an arbitrary number of parame
 *tests
 NEW: The contents of the TestDIRAC package is moved into the tests directory here
 
+
+[v6r14p38]
+
+*Core
+CHANGE: Unhashable objects as DAG graph nodes
+
+*RMS
+CHANGE: Added possibility of constant delay for RMS operations
+
+[v6r14p37]
+
+*Core
+NEW: Added soft implementation of a Direct Acyclic Graph
+
+*Configuration
+FIX: Bdii2CSAgent finds all CEs of a site (was finding only one)
+
+*Resources
+FIX: Make sure transferClient connects to the same ProxyStorage instance
+
+[v6r14p36]
+
+*Core
+FIX: Sending mails to multiple recipients was not working
+
+*WMS
+FIX: Allow staging from SEs accessible by protocol
+
+
+[v6r14p35]
+
+*Core
+FIX: SOAPFactory - fixes for import statements of suds module to work with the
+     suds-jurko package that replaces the suds package
+
+*Resources
+FIX: BatchSystems.Torque - take into account that in some cases jobID includes
+     a host name that should be stripped off
+FIX: SSHComputingElement - in _getJobOutputFiles() fixed bug where the output
+     of scpCall() call was wrongly interpreted    
+FIX: ProxyStorage - evaluate the service url as simple /DataManagement/StorageElementProxy
+     to solve the problem with redundant StorageElementProxy services with multiple
+     possible urls       
+     
+*RSS
+CHANGE: Configurations.py - Added DTScheduled3 policy (3 hours before downtime)     
+     
+*WMS
+FIX: pilotCommands - take into account that in the case of Torque batch system
+     jobID includes a host name that should be stripped off   
+       
 [v6r14p34]
 
 *Configuration
@@ -219,7 +343,7 @@ FIX: FailoverRequest - forcing setting the input file Unused if it was already s
 BUGFIX: MonitoringHandler - in deleteActivities() use retVal['Message'] if result is not OK
 
 *Resources
-FIX: XROOTStorage - in getFile() evalute file URL without URL parameters
+FIX: XROOTStorage - in getFile() evaluate file URL without URL parameters
                     in __putSingleFile() use result['Message'] in case of error
                     
 *RMS
@@ -250,7 +374,7 @@ CHANGE: dirac-wms-cpu-normalization - reduce memory usage by using xrange() inst
 [v6r14p28]
 
 *TS
-FIX: TaskManager - protection against am empty task disctionary in 
+FIX: TaskManager - protection against am empty task dictionary in 
      prepareTransformationTasks()
 FIX: Test_Client_TransformationSystem - fixes ti run in the Travis CI 
      environment

@@ -1,7 +1,3 @@
-########################################################################
-# $Id$
-########################################################################
-
 """ Definitions of a standard set of pilot commands
 
     Each commands is represented by a class inheriting CommandBase class.
@@ -435,7 +431,7 @@ class CheckWNCapabilities( CommandBase ):
       self.cfg.append( self.pp.localConfigFile )  # this file is as input
 
     checkCmd = 'dirac-wms-get-wn-parameters -S %s -N %s -Q %s %s' % ( self.pp.site, self.pp.ceName, self.pp.queueName,
-                                                                       " ".join( self.cfg ) )
+                                                                      " ".join( self.cfg ) )
     retCode, result = self.executeAndGetOutput( checkCmd, self.pp.installEnv )
     if retCode:
       self.log.error( "Could not get resource parameters [ERROR %d]" % retCode )
@@ -563,7 +559,7 @@ class ConfigureSite( CommandBase ):
     # Take the reference from the Torque batch system
     if 'PBS_JOBID' in os.environ:
       self.pp.flavour = 'SSHTorque'
-      pilotRef = 'sshtorque://' + self.pp.ceName + '/' + os.environ['PBS_JOBID']
+      pilotRef = 'sshtorque://' + self.pp.ceName + '/' + os.environ['PBS_JOBID'].split('.')[0]
 
     # Take the reference from the OAR batch system
     if 'OAR_JOBID' in os.environ:
@@ -575,7 +571,7 @@ class ConfigureSite( CommandBase ):
       self.pp.flavour = 'SSHGE'
       pilotRef = 'sshge://' + self.pp.ceName + '/' + os.environ['JOB_ID']
     # Generic JOB_ID
-    elif os.environ.has_key( 'JOB_ID' ):
+    elif 'JOB_ID' in os.environ:
       self.pp.flavour = 'Generic'
       pilotRef = 'generic://' + self.pp.ceName + '/' + os.environ['JOB_ID']
 
@@ -598,7 +594,7 @@ class ConfigureSite( CommandBase ):
     if 'SLURM_JOBID' in os.environ:
       self.pp.flavour = 'SSHSLURM'
       pilotRef = 'sshslurm://' + self.pp.ceName + '/' + os.environ['SLURM_JOBID']
-      
+
     # This is the CREAM direct submission case
     if 'CREAM_JOBID' in os.environ:
       self.pp.flavour = 'CREAM'
@@ -634,7 +630,7 @@ class ConfigureSite( CommandBase ):
       pilotRef = os.environ['GRID_GLOBAL_JOBID']
 
     # VMDIRAC case
-    if os.environ.has_key( 'VMDIRAC_VERSION' ):
+    if 'VMDIRAC_VERSION' in os.environ:
       self.pp.flavour = 'VMDIRAC'
       pilotRef = 'vm://' + self.pp.ceName + '/' + os.environ['JOB_ID']
 
@@ -776,7 +772,7 @@ class ConfigureCPURequirements( CommandBase ):
       self.exitWithError( retCode )
 
     # HS06 benchmark
-    # FIXME: this is a hack!
+    # FIXME: this is a (necessary) hack!
     cpuNormalizationFactor = float( cpuNormalizationFactorOutput.split( '\n' )[0].replace( "Estimated CPU power is ",
                                                                                            '' ).replace( " HS06", '' ) )
     self.log.info( "Current normalized CPU as determined by 'dirac-wms-cpu-normalization' is %f" % cpuNormalizationFactor )
@@ -784,12 +780,17 @@ class ConfigureCPURequirements( CommandBase ):
     configFileArg = ''
     if self.pp.useServerCertificate:
       configFileArg = '-o /DIRAC/Security/UseServerCertificate=yes'
-    retCode, cpuTime = self.executeAndGetOutput( 'dirac-wms-get-queue-cpu-time %s %s' % ( configFileArg,
-                                                                                          self.pp.localConfigFile ),
-                                                 self.pp.installEnv )
+    retCode, cpuTimeOutput = self.executeAndGetOutput( 'dirac-wms-get-queue-cpu-time %s %s' % ( configFileArg,
+                                                                                                self.pp.localConfigFile ),
+                                                       self.pp.installEnv )
+
     if retCode:
       self.log.error( "Failed to determine cpu time left in the queue [ERROR %d]" % retCode )
       self.exitWithError( retCode )
+
+    for line in cpuTimeOutput.split( '\n' ):
+      if "CPU time left determined as" in line:
+        cpuTime = int(line.replace("CPU time left determined as", '').strip())
     self.log.info( "CPUTime left (in seconds) is %s" % cpuTime )
 
     # HS06s = seconds * HS06
