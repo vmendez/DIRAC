@@ -181,8 +181,7 @@ class EiscatPolicy( SecurityManagerBase ):
         self.logger.info( 'Error getting entry % s in remote Eiscat Catalogue, no eiscat rules ' % (tier_path) )
         return credDict
       if len(list_entries) == 0:
-        self.logger.info( 'Grant public access: no entry for path % s in remote Eiscat Catalogue, then no restriction in eiscat_files' % (tier_path) )
-        credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
+        self.logger.info( 'no entry for path % s in remote Eiscat Catalogue, no eiscat rules ' % (tier_path) )
         return credDict
       entry=list_entries[0]
       if entry is None:
