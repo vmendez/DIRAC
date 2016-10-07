@@ -1,68 +1,11 @@
 from DIRAC import S_OK, S_ERROR, gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getAllGroups, getGroupOption
 from DIRAC.DataManagementSystem.DB.FileCatalogComponents.SecurityManager import SecurityManagerBase, _readMethods, _writeMethods
+from DIRAC.Resources.Catalog.FileCatalogFactory import FileCatalogFactory
 from DIRAC.Core.Utilities.ReturnValues import returnSingleResult
 
 import os
 import datetime
-import MySQLdb
-
-class nicedict(dict):
-	"""A dictionary that behaves like an object, i.e. you can access the
-	variables as direct members"""
-	def __getattr__(self, attr):
-		return self[attr]
-	def __setattr__(self, attr, value):
-		self[attr] = value
-
-class Conn:
-	def __init__(self, dbi, conn):
-		"""Wraps a database connection with eiscat specific methods.
-		dbi is the database library module and
-		conn is the connection."""
-
-                self.logger = gLogger.getSubLogger( 'EiscatRemoteConnection' )
-                try:
-		  assert dbi.paramstyle == 'format', "%s is used for value substitution"
-		  self.dbi, self.conn = dbi, conn
-		  self.cur = conn.cursor()
-                except Exception, x:
-                  self.logger.info( 'Error: connection failed: %s' % str(x))
-
-	def select_sql(self, sql, objs, limit=None):
-		c = self.cur
-		if limit:
-			sql += " LIMIT %d"%limit
-                try:
-		  c.execute(sql, objs)
-                except Exception, x:
-                  self.logger.info( 'Error: sql failed: %s' % str(x))
-		valuess = c.fetchall()
-		arry = []
-		for values in valuess:
-			dict = nicedict()
-			for col_info, value in zip(c.description, values):
-				name = col_info[0]
-				dict[name] = value
-			arry.append(dict)
-		return arry
-
-	def selectEiscatFileInfo(self, tier_path, values=(), what="*", limit=None):
-		sql = "SELECT "+what+" FROM resource, storage, experiments WHERE resource.resource_id = storage.resource_id AND resource.experiment_id = experiments.experiment_id AND storage.location rlike '"+tier_path+"$' "
-                self.logger.info( 'Submitting sql %s to remote Eiscat Catalog' % sql)
-		return self.select_sql(sql, values, limit=limit)
-
-	def close(self):
-		"Closes the connection. The object is unusable after this call."
-		self.conn.commit()
-		self.conn.close()
-		del self.conn
-		del self.dbi
-
-def openMySQL(**params):
-      	db=MySQLdb.connect(**params)
-       	return Conn(MySQLdb, db)
-
 
 class EiscatPolicy( SecurityManagerBase ):
   """ This class implements an eiscat policy, connecting remote eiscat catalog
@@ -78,21 +21,25 @@ class EiscatPolicy( SecurityManagerBase ):
     # dirac group : voms role it has
     self.diracGroups = {}
 
+    fcType = 'EiscatFileCatalog'
+    result = FileCatalogFactory().createCatalog(fcType)
+    if not result['OK']:
+      self.logger.error( 'EiscatFileCatalog not found' )
+      return
+    self.fc = result['Value']
     # Lifetime of the info in the two dictionaries
     self.CACHE_TIME = datetime.timedelta(seconds = 600)
     self.__buildRolesAndGroups()
 
 
     ########################################
-    # IMPORTANT global root paths:
+    # IMPORTANT globals 
     ########################################
-    self.root_pfn='/data/dirac/storage/StorageElement/eiscat.se/archive'
     self.now = datetime.datetime.now()
     self.lastyear=self.now.year - 1
     #for testing:
     #self.lastyear=self.now.year - 2
     self.lastmonth=self.now.month - 1
-    self.dbclient=openMySQL(host="dirac.eiscat.se",db='disk_archive',user='www')
 
   def __datetime2timestamp(t):
 	return (t-datetime.datetime(1970,1,1)).total_seconds()
@@ -150,7 +97,7 @@ class EiscatPolicy( SecurityManagerBase ):
     return  vomsGrp and vomsOtherGrp and ( vomsGrp == vomsOtherGrp )
 
   def __eiscatFilesMatching( self, path, credDict, origGrp, isDir = None ):
-    """ Returns original credDict of the esicat_files if matchs eiscat policy in remote server """
+    """ Returns original credDict of the esicat_files if matchs eiscat policy with metadata catalogue info """
 
     if isDir is None:
       self.logger.info( 'EiscatFilesMatching needs isDir, no eiscat rules matching' )
@@ -160,37 +107,37 @@ class EiscatPolicy( SecurityManagerBase ):
       self.logger.info( 'eiscat rules to path %s ' % path )
       # get user credentials in group access:
       credGroup = credDict.get( 'group', 'anon' )
-
-      # get the info of the tier path
-      linkpath='/eiscat.se/'
-      pos=path.find(linkpath)
-      if pos == -1:
-         # user data space
-         self.logger.info( 'can not continue eiscat rules, no linkpath %s ' % linkpath )
-         return credDict
-
-      pos=pos+len(linkpath)
+   
       if isDir is True:
-        tier_path=path[pos:] 
-      else:
-        last=path.rfind('/')
-        tier_path=path[pos:last] 
-      self.logger.info( 'tier_path %s ' % tier_path )
-      list_entries=self.dbclient.selectEiscatFileInfo( tier_path=tier_path, values=(), what="storage.location, storage.bytes, resource.start, resource.end, resource.type, resource.account, experiments.experiment_name, experiments.country, experiments.antenna")
-      if list_entries is None:
-        self.logger.info( 'Error getting entry % s in remote Eiscat Catalogue, no eiscat rules ' % (tier_path) )
-        return credDict
-      if len(list_entries) == 0:
-        self.logger.info( 'no entry for path % s in remote Eiscat Catalogue, no eiscat rules ' % (tier_path) )
-        return credDict
-      entry=list_entries[0]
-      if entry is None:
-        self.logger.info( 'no entry for path % s in remote Eiscat Catalogue, no eiscat rules ' % (tier_path) )
-        return credDict
+        rpcClient = self.fc._getRPC( timeout = 120 )
+        result = rpcClient.getDirectoryUserMetadata( path )
+      else: 
+        directory = "/".join( path.split( "/" )[:-1] )
+        rpcClient = self.fc._getRPC( timeout = 120 )
+        result = rpcClient.getFileUserMetadata( path )
+        if not result['OK']:
+          return result
+        fmeta = result['Value']
+        result = rpcClient.getDirectoryUserMetadata( directory )
+        if not result['OK']:
+          return result
+        fmeta.update(result['Value'])
+        result=S_OK(fmeta)
 
-      self.logger.info( 'Entry in the remote Eiscat Catalogue %s ' % entry )
+      self.logger.info( 'Result %s ' % (result) )
 
-      refdate=entry['start']
+      if not result['OK']:
+        self.logger.info( 'Error getting entry %s in Eiscat Catalogue, no eiscat rules ' % (path) )
+        return credDict
+      if not result['Value']:
+        self.logger.info( 'Error getting Value of entry %s in Eiscat Catalogue, no eiscat rules ' % (path) )
+        return credDict
+      entry=result['Value']
+
+      self.logger.info( 'Path %s  metadata entry in Eiscat Catalogue %s ' % (path,entry) )
+
+      strdate=entry['start']
+      refdate = datetime.datetime.strptime(strdate, '%Y-%m-%d/%H:%M:%S')
       year=int(refdate.year)
       month=int(refdate.month)
       if not ((year > self.lastyear) or (year == self.lastyear and month > self.lastmonth)):
@@ -219,18 +166,19 @@ class EiscatPolicy( SecurityManagerBase ):
 
       tag_account = None
       if entry['account'] is not None: 
-        tag_account=[]
-        tag_account.append(entry['account'])
-        if entry['account'].find('NI'):
-          tag_account.append('JP')
-        if entry['account'].find('SW'):
-          tag_account.append('SE')
-        if entry['account'].find('GE'):
-          tag_account.append('DE')
-        if entry['account'].find('SP'):
-          tag_account.append('owner')
-        if entry['account'].find('CP'):
-          tag_account.append('common')
+        if not entry['account'] == 'None':
+          tag_account=[]
+          tag_account.append(entry['account'])
+          if entry['account'].find('NI'):
+            tag_account.append('JP')
+          if entry['account'].find('SW'):
+            tag_account.append('SE')
+          if entry['account'].find('GE'):
+            tag_account.append('DE')
+          if entry['account'].find('SP'):
+            tag_account.append('owner')
+          if entry['account'].find('CP'):
+            tag_account.append('common')
 
       self.logger.info( 'After rules tag_account %s ' % tag_account)
       self.logger.info( 'Going to match with request group: %s ' % credGroup)
