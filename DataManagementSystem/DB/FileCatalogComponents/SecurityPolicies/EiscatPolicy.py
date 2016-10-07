@@ -111,24 +111,26 @@ class EiscatPolicy( SecurityManagerBase ):
       if isDir is True:
         rpcClient = self.fc._getRPC( timeout = 120 )
         result = rpcClient.getDirectoryUserMetadata( path )
+        if not result['OK']:
+          self.logger.error( 'Error in getDirectoryUserMetadata, no eiscat rules %s ' % (result) )
+          return credDict
       else: 
         directory = "/".join( path.split( "/" )[:-1] )
         rpcClient = self.fc._getRPC( timeout = 120 )
         result = rpcClient.getFileUserMetadata( path )
         if not result['OK']:
-          return result
+          self.logger.error( 'Error in getFileUserMetadata, no eiscat rules %s ' % (result) )
+          return credDict
         fmeta = result['Value']
         result = rpcClient.getDirectoryUserMetadata( directory )
         if not result['OK']:
-          return result
+          self.logger.error( 'Error in getDirectoryUserMetadata, no eiscat rules %s ' % (result) )
+          return credDict
         fmeta.update(result['Value'])
         result=S_OK(fmeta)
 
       self.logger.info( 'Result %s ' % (result) )
 
-      if not result['OK']:
-        self.logger.info( 'Error getting entry %s in Eiscat Catalogue, no eiscat rules ' % (path) )
-        return credDict
       if not result['Value']:
         self.logger.info( 'Error getting Value of entry %s in Eiscat Catalogue, no eiscat rules ' % (path) )
         return credDict
@@ -136,36 +138,45 @@ class EiscatPolicy( SecurityManagerBase ):
 
       self.logger.info( 'Path %s  metadata entry in Eiscat Catalogue %s ' % (path,entry) )
 
-      strdate=entry['start']
-      refdate = datetime.datetime.strptime(strdate, '%Y-%m-%d/%H:%M:%S')
-      year=int(refdate.year)
-      month=int(refdate.month)
+      if 'start' in entry:
+        strdate=entry['start']
+        refdate = datetime.datetime.strptime(strdate, '%Y-%m-%d/%H:%M:%S')
+        year=int(refdate.year)
+        month=int(refdate.month)
+      else:
+	#nostart means no restriction in the access to the file/folder
+        #actually, all the files shall has date and only intermediate folders could not have date, so enable reading the dir
+        self.logger.info( 'No start date is access same as more than a year')
+        year=2000  
+        month=1
+
       if not ((year > self.lastyear) or (year == self.lastyear and month > self.lastmonth)):
         credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
-        self.logger.info( 'More than a year, public access with credetials %s ' % credDict)
+        self.logger.info( 'Grant public access (%s): more than a year  ' % credDict)
         return credDict
 
       self.logger.info( 'Less than a year rules')
       # this is be used for groups when files less than a year
       tag_country = None
-      if entry['country'] is not None: 
-        tag_country=str(entry['country'])
-        self.logger.info( 'Initial tag_country %s ' % tag_country)
-        if tag_country is 'NI':
-          tag_country='JP'
-        elif tag_country is 'SW':
-          tag_country='SE'
-        elif tag_country is 'GE':
-          tag_country='DE'
-        elif tag_country is 'SP':
-          tag_country='owner'
-        elif tag_country in ['CP','AA', 'G4', 'G2', 'G7']:
-          tag_country='common'
+      if 'country' in entry:
+        if not entry['country'] == 'None':
+          tag_country=str(entry['country'])
+          self.logger.info( 'Initial tag_country %s ' % tag_country)
+          if tag_country is 'NI':
+            tag_country='JP'
+          elif tag_country is 'SW':
+            tag_country='SE'
+          elif tag_country is 'GE':
+            tag_country='DE'
+          elif tag_country is 'SP':
+            tag_country='owner'
+          elif tag_country in ['CP','AA', 'G4', 'G2', 'G7']:
+            tag_country='common'
 
       self.logger.info( 'After rules tag_country %s ' % tag_country)
 
       tag_account = None
-      if entry['account'] is not None: 
+      if 'account' in entry:
         if not entry['account'] == 'None':
           tag_account=[]
           tag_account.append(entry['account'])
@@ -194,23 +205,23 @@ class EiscatPolicy( SecurityManagerBase ):
 
       if tag_account is None:
         if tag_country is None:
-          self.logger.info( 'Grant public access: no account and no country ')
           credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
+          self.logger.info( 'Grant public access (%s): no account and no country  ' % credDict)
           return credDict
         else:
           if tag_country is 'common':
-            self.logger.info( 'Grant public access: country is common ')
             credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
+            self.logger.info( 'Grant public access (%s): country  is common ' % credDict)
             return credDict
           if tagCredGroup is tag_country:
-            self.logger.info( 'Grant public access: tagCredGroup %s is tag_country %s ' %(tagCredGroup, tag_country))
             credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
+            self.logger.info( 'Grant public access (%s): tagCredGroup %s is tag_country %s ' %(credDict, tagCredGroup, tag_country))
             return credDict
       else:
         for tag in tag_account:
           if tag.find(tagCredGroup):
-            self.logger.info( 'Grant public access: tagCredGroup %s is in tag_account %s ' %(tagCredGroup, tag_account))
             credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
+            self.logger.info( 'Grant public access (%s): tagCredGroup %s is tag_account %s ' %(credDict, tagCredGroup, tag_account))
             return credDict
 
     self.logger.info( 'No eiscat rules to Public Grant, let user credentials' )
