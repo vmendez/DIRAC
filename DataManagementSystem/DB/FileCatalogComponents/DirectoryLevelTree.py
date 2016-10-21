@@ -318,6 +318,12 @@ class DirectoryLevelTree(DirectoryTreeBase):
     result = self.__getNumericPath( dirID )
     if not result['OK']:
       return result
+
+    #START HOTFIX
+    if not 'Level' in result.keys():
+      return result
+    #END HOTFIX
+
     level = result['Level']
     if level == 0:
       return S_OK( [dirID] )
