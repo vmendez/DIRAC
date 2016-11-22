@@ -538,6 +538,17 @@ class FileCatalogHandler( RequestHandler ):
       return result
 
     lfnsResultList = result['Value']['Successful'].values()
+    #yzz bugfix, only lnfs with allowed by Access Policy
+    res = gFileCatalogDB._checkPathPermissions( 'isFile', lfnsResultList, self.getRemoteCredentials() )
+    if not res['OK']:
+      return result
+    lfnsResultList = res['Value']['Successful'].keys()
+
+    if len(lfnsResultList)==0:
+      result = S_OK( {"TotalRecords":0, "Records":{} } )
+      return result
+    #yzz end bugfix
+
     resultDetails = gFileCatalogDB.getFileDetails( lfnsResultList, self.getRemoteCredentials() )
     if not resultDetails['OK']:
       return resultDetails
