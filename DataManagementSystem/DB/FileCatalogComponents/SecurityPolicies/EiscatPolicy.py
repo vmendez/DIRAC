@@ -209,11 +209,11 @@ class EiscatPolicy( SecurityManagerBase ):
           self.logger.info( 'Grant public access (%s): no account and no country  ' % credDict)
           return credDict
         else:
-          if tag_country is 'common':
+          if tag_country == 'common':
             credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
             self.logger.info( 'Grant public access (%s): country  is common ' % credDict)
             return credDict
-          if tagCredGroup is tag_country:
+          if tagCredGroup == tag_country:
             credDict = { 'username' : credDict.get( 'username', 'anon' ), 'group' : origGrp}
             self.logger.info( 'Grant public access (%s): tagCredGroup %s is tag_country %s ' %(credDict, tagCredGroup, tag_country))
             return credDict
